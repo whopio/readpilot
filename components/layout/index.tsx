@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ReactNode } from "react";
 import useScroll from "@/lib/hooks/use-scroll";
 import Meta from "./meta";
+import { signIn, signOut } from "next-auth/react";
 
 export default function Layout({
   meta,
@@ -20,7 +21,7 @@ export default function Layout({
 }) {
   const { data: session, status } = useSession();
   const scrolled = useScroll(50);
-
+  const user = session?.user?.name;
   return (
     <>
       <Meta {...meta} />
@@ -43,19 +44,36 @@ export default function Layout({
             ></Image>
             <p>Read Pilot</p>
           </Link>
-          <div>
-            <AnimatePresence>
-              {!session && status !== "loading"}
+          {!user ? (
+            <>
+              <div>
+                <AnimatePresence>
+                  {!session && status !== "loading"}
+                  <motion.a
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
+                    onClick={() => signIn("whop")}
+                    {...FADE_IN_ANIMATION_SETTINGS}
+                  >
+                    Sign In
+                  </motion.a>
+                </AnimatePresence>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center">
+              <div className="mr-4 text-sm">{user ? `Signed in as ${user}` : ''}</div>
+              <AnimatePresence>
+                {!session && status !== "loading"}
                 <motion.a
-                  className="rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
-                  href="https://twitter.com/Tisoga"
-                  target="_blank"
+                  className="inline-block rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
+                  onClick={() => signOut()}
                   {...FADE_IN_ANIMATION_SETTINGS}
                 >
-                  Subscribe
+                  Sign Out
                 </motion.a>
-            </AnimatePresence>
-          </div>
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </div>
       <main className="flex min-h-screen w-full flex-col items-center justify-center py-32">
@@ -72,7 +90,7 @@ export default function Layout({
           >
             Next.js
           </a>
-          &nbsp;and {""}
+          , {""}
           <a
             className="font-medium text-gray-800 underline transition-colors"
             href="https://openai.com/"
@@ -80,6 +98,15 @@ export default function Layout({
             rel="noopener noreferrer"
           >
             OpenAI
+          </a>
+          ,&nbsp;and {""}
+          <a
+            className="font-medium text-gray-800 underline transition-colors"
+            href="https://whop.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Whop
           </a>
         </p>
       </div>

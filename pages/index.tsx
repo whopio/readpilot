@@ -8,15 +8,13 @@ import { useState, useEffect } from "react";
 import LinkIcon from "@/components/shared/icons/link";
 import { AccessPass, Membership, Plan } from "@whop-sdk/core";
 import { usePurchaseLink } from "@/lib/get-purchase-link";
-import { GetServerSideProps } from "next";
-import getSdk from "@/lib/get-user-sdk/pages";
-import findPass from "@/lib/has-pass";
-import ServerSDK from "@/lib/sdk";
-import { signIn } from "next-auth/react";
+import { useRouter } from "next/router";
 
 const ALLOWED_PASS: string = process.env.NEXT_PUBLIC_REQUIRED_PASS || "";
 
 const RECOMMENDED_PLAN = process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID || "";
+const PAID_RECOMMENDED_PLAN =
+  process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID || "";
 
 type PassGatedProps =
   | {
@@ -31,27 +29,57 @@ type PassGatedProps =
     };
 
 export default function Home(props: PassGatedProps) {
-  const membership = props.membership;
-  const pass = props.pass;
-  const plan = props.plan;
-  const link = usePurchaseLink(RECOMMENDED_PLAN);
+  const router = useRouter();
+  const { membershipId } = router.query;
+  let [membership, setMembership] = useState(false);
+
+  useEffect(() => {
+    console.log("Membership Id changed to: ", membership);
+  }, [membership]);
+
+  useEffect(() => {
+    if (!membershipId) return;
+    fetchMembership();
+  }, [membershipId]);
+
+
+const fetchMembership = async () => {
+  const response = await fetch("api/fetchMembership", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ membershipId }),
+  })
+    .then((res) => {
+      if (res.status === 200) {
+        return res.json();
+      }
+      throw new Error("Something went wrong");
+    })
+    .then((responseJson) => {
+      console.log(responseJson);
+      if (
+        responseJson.plan === process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID ||
+        responseJson.plan === process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID
+      ) {
+        setMembership(false)
+      } else {
+        setMembership(true)
+      }
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+};
+
+  const freeLink = usePurchaseLink(RECOMMENDED_PLAN);
+  const paidLink = usePurchaseLink(PAID_RECOMMENDED_PLAN);
 
   const [url, setUrl] = useState("");
   const [showGeneratedCards, setShowGeneratedCards] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
-
-  useEffect(() => {
-    if (!membership) {
-      setUrl(link);
-    }
-  }, [membership, link]);
-
-  useEffect(() => {
-    if (url) {
-      window.location.href = url;
-    }
-  }, [url]);
 
   const generateCards = async (e: any) => {
     e.preventDefault();
@@ -88,12 +116,11 @@ export default function Home(props: PassGatedProps) {
 
     setLoading(false);
   };
-
   return (
     <Layout>
       <div>
         <motion.div
-          className="flex w-full flex-col items-center justify-center px-5 xl:px-0"
+          className="flex w-full flex-col items-center justify-center px-5 text-center xl:px-0"
           initial="hidden"
           whileInView="show"
           animate="show"
@@ -154,42 +181,69 @@ export default function Home(props: PassGatedProps) {
               you.
             </Balancer>
           </motion.p>
-
-          <motion.div className="mt-10" variants={FADE_DOWN_ANIMATION_VARIANTS}>
-            <div className="relative flex w-[35rem] items-center justify-center">
-              <LinkIcon className="insert-y-1 w absolute left-0 my-3 ml-3 w-7 text-gray-500" />
-              <input
-                type="url"
-                placeholder="Input your link"
-                value={url}
-                onChange={(e) => {
-                  setUrl((e.target as HTMLInputElement).value);
-                }}
-                required
-                className="block w-full rounded-2xl border border-gray-200 bg-white p-2 pl-12 text-lg text-gray-600 shadow-md focus:border-black focus:outline-none focus:ring-0"
-              />
-            </div>
-          </motion.div>
-
-          <motion.div className="mt-8" variants={FADE_DOWN_ANIMATION_VARIANTS}>
-            {!loading && (
-              <button
-                className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
-                onClick={(e) => generateCards(e)}
+          {membership ? (
+            <>
+              <motion.div
+                className="mt-10"
+                variants={FADE_DOWN_ANIMATION_VARIANTS}
               >
-                Start Analyzing →
-              </button>
-            )}
-            {loading && (
-              <button
-                className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
-                disabled
+                <div className="relative flex w-[35rem] items-center justify-center">
+                  <LinkIcon className="insert-y-1 w absolute left-0 my-3 ml-3 w-7 text-gray-500" />
+                  <input
+                    type="url"
+                    placeholder="Input your link"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl((e.target as HTMLInputElement).value);
+                    }}
+                    required
+                    className="block w-full rounded-2xl border border-gray-200 bg-white p-2 pl-12 text-lg text-gray-600 shadow-md focus:border-black focus:outline-none focus:ring-0"
+                  />
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="mt-8"
+                variants={FADE_DOWN_ANIMATION_VARIANTS}
               >
-                <span>Analyzing </span>
-                <LoadingDots color="grey" />
-              </button>
-            )}
-          </motion.div>
+                {!loading && (
+                  <button
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
+                    onClick={(e) => generateCards(e)}
+                  >
+                    Start Analyzing →
+                  </button>
+                )}
+                {loading && (
+                  <button
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
+                    disabled
+                  >
+                    <span>Analyzing </span>
+                    <LoadingDots color="grey" />
+                  </button>
+                )}
+              </motion.div>
+            </>
+          ) : (
+            <motion.div
+              className="mt-8"
+              variants={FADE_DOWN_ANIMATION_VARIANTS}
+            >
+              <a href={freeLink}>
+                <button className="rounded-full border border-black bg-black p-1.5 px-4 text-center text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl">
+                  Get Access for Free →
+                </button>
+              </a>
+              <br />
+              <br />
+              <a href={paidLink}>
+                <button className="rounded-full border border-black bg-black p-1.5 px-4 text-center text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl">
+                  Get Access for $0.99 →
+                </button>
+              </a>
+            </motion.div>
+          )}
         </motion.div>
 
         {showGeneratedCards && (
@@ -203,45 +257,3 @@ export default function Home(props: PassGatedProps) {
     </Layout>
   );
 }
-
-export const getServerSideProps: GetServerSideProps<PassGatedProps> = async ({
-    req,
-    res,
-  }) => {
-    const { sdk } = await getSdk(req, res);
-    if (!sdk)
-      return {
-        redirect: {
-          destination: "/get-started",
-          permanent: false,
-        },
-      };
-    const membership = await findPass(sdk, ALLOWED_PASS);
-    if (membership)
-      return {
-        props: {
-          membership,
-          pass: null,
-          plan: null,
-        },
-      };
-    else {
-      const [pass, plan] = await Promise.all([
-        ServerSDK.accessPasses.retrieveAccessPass({
-            whopCompany: process.env.WHOP_COMPANY_ID || "",
-          id: ALLOWED_PASS,
-        }),
-        ServerSDK.plans.retrievePlan({
-          whopCompany: process.env.WHOP_COMPANY_ID || "",
-          id: RECOMMENDED_PLAN,
-        }),
-      ]);
-      return {
-        props: {
-          membership: null,
-          pass,
-          plan,
-        },
-      };
-    }
-  };
