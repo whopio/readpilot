@@ -4,10 +4,116 @@ import Balancer from "react-wrap-balancer";
 import { motion } from "framer-motion";
 import { FADE_DOWN_ANIMATION_VARIANTS } from "@/lib/constants";
 import { Github, LoadingDots, Twitter } from "@/components/shared/icons";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import LinkIcon from "@/components/shared/icons/link";
+import { AccessPass, Membership, Plan } from "@whop-sdk/core";
+import { usePurchaseLink } from "@/lib/get-purchase-link";
+import { useRouter } from "next/router";
+import { setCookie, getCookie } from 'cookies-next'
+import { IncomingMessage, ServerResponse } from 'http';
 
-export default function Home() {
+const ALLOWED_PASS: string = process.env.NEXT_PUBLIC_REQUIRED_PASS || "";
+
+const RECOMMENDED_PLAN = process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID || "";
+const PAID_RECOMMENDED_PLAN =
+  process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID || "";
+
+type PassGatedProps =
+  | {
+      membership: Membership;
+      pass: null;
+      plan: null;
+    }
+  | {
+      membership: null | boolean;
+      pass: AccessPass;
+      plan: Plan;
+    };
+
+    export const getServerSideProps = ({ req, res }: { req: IncomingMessage, res: ServerResponse }) => {
+  let membership = getCookie('membership', { req, res }) || false;
+
+  return { props: {membership: membership} };
+};
+
+export default function Home(props: PassGatedProps) {
+  const router = useRouter();
+  const { membershipId, code } = router.query;
+  let membership = props.membership
+
+  useEffect(() => {
+    if (!membershipId || !membership) return;
+    fetchMembership();
+  }, [membershipId]);
+
+  useEffect(() => {
+    if (!code || !membership) return;
+    fetchCodeAccess();
+  }, [code]);
+
+
+const fetchMembership = async () => {
+  const response = await fetch("api/fetchMembership", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ membershipId }),
+  })
+    .then((res) => {
+      if (res.status === 200) {
+        return res.json();
+      }
+      throw new Error("Something went wrong");
+    })
+    .then((responseJson) => {
+      if (
+        responseJson.plan === process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID ||
+        responseJson.plan === process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID
+        ) {
+          setCookie('membership', false)
+          membership = false
+        } else {
+          setCookie('membership', true)
+          membership = true
+        }
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+};
+
+const fetchCodeAccess = async () => {
+  const response = await fetch("api/fetchCodeAccess", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ code }),
+  })
+    .then((res) => {
+      if (res.status === 200) {
+        return res.json();
+      }
+      throw new Error("Something went wrong");
+    })
+    .then((responseJson) => {
+      if (
+        responseJson.valid
+        ) {
+          setCookie('membership', false)
+        } else {
+          setCookie('membership', true)
+        }
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+};
+
+  const freeLink = usePurchaseLink(RECOMMENDED_PLAN);
+  const paidLink = usePurchaseLink(PAID_RECOMMENDED_PLAN);
+
   const [url, setUrl] = useState("");
   const [showGeneratedCards, setShowGeneratedCards] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,7 +122,6 @@ export default function Home() {
   const generateCards = async (e: any) => {
     e.preventDefault();
 
-    // TODO(jiayuan): refactor this later
     if (url === "") {
       console.log("Please enter a valid URL");
       return;
@@ -39,7 +144,6 @@ export default function Home() {
         throw new Error("Something went wrong");
       })
       .then((responseJson) => {
-        console.log(responseJson);
         setResults(responseJson.data);
         setShowGeneratedCards(true);
       })
@@ -49,12 +153,11 @@ export default function Home() {
 
     setLoading(false);
   };
-
   return (
     <Layout>
       <div>
         <motion.div
-          className="flex w-full flex-col items-center justify-center px-5 xl:px-0"
+          className="flex w-full flex-col items-center justify-center px-5 text-center xl:px-0"
           initial="hidden"
           whileInView="show"
           animate="show"
@@ -115,58 +218,69 @@ export default function Home() {
               you.
             </Balancer>
           </motion.p>
-
-          <motion.p
-            className="mt-6 w-[1024px] text-center text-xl text-black"
-            variants={FADE_DOWN_ANIMATION_VARIANTS}
-          >
-            <Balancer>
-              <span className="bg-gradient-to-r from-red-600 to-amber-600 bg-clip-text font-bold text-transparent">
-                3720
-              </span>{" "}
-              Users Analyzed{" "}
-              <span className="bg-gradient-to-r from-red-600 to-amber-600 bg-clip-text font-bold text-transparent">
-                5223
-              </span>{" "}
-              Articles
-            </Balancer>
-          </motion.p>
-
-          <motion.div className="mt-10" variants={FADE_DOWN_ANIMATION_VARIANTS}>
-            <div className="relative flex w-[35rem] items-center justify-center">
-              <LinkIcon className="insert-y-1 w absolute left-0 my-3 ml-3 w-7 text-gray-500" />
-              <input
-                type="url"
-                placeholder="Input your link"
-                value={url}
-                onChange={(e) => {
-                  setUrl((e.target as HTMLInputElement).value);
-                }}
-                required
-                className="block w-full rounded-2xl border border-gray-200 bg-white p-2 pl-12 text-lg text-gray-600 shadow-md focus:border-black focus:outline-none focus:ring-0"
-              />
-            </div>
-          </motion.div>
-
-          <motion.div className="mt-8" variants={FADE_DOWN_ANIMATION_VARIANTS}>
-            {!loading && (
-              <button
-                className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
-                onClick={(e) => generateCards(e)}
+          {membership ? (
+            <>
+              <motion.div
+                className="mt-10"
+                variants={FADE_DOWN_ANIMATION_VARIANTS}
               >
-                Start Analyzing →
-              </button>
-            )}
-            {loading && (
-              <button
-                className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
-                disabled
+                <div className="relative flex w-[35rem] items-center justify-center">
+                  <LinkIcon className="insert-y-1 w absolute left-0 my-3 ml-3 w-7 text-gray-500" />
+                  <input
+                    type="url"
+                    placeholder="Input your link"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl((e.target as HTMLInputElement).value);
+                    }}
+                    required
+                    className="block w-full rounded-2xl border border-gray-200 bg-white p-2 pl-12 text-lg text-gray-600 shadow-md focus:border-black focus:outline-none focus:ring-0"
+                  />
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="mt-8"
+                variants={FADE_DOWN_ANIMATION_VARIANTS}
               >
-                <span>Analyzing </span>
-                <LoadingDots color="grey" />
-              </button>
-            )}
-          </motion.div>
+                {!loading && (
+                  <button
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
+                    onClick={(e) => generateCards(e)}
+                  >
+                    Start Analyzing →
+                  </button>
+                )}
+                {loading && (
+                  <button
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl"
+                    disabled
+                  >
+                    <span>Analyzing </span>
+                    <LoadingDots color="grey" />
+                  </button>
+                )}
+              </motion.div>
+            </>
+          ) : (
+            <motion.div
+              className="mt-8"
+              variants={FADE_DOWN_ANIMATION_VARIANTS}
+            >
+              <a href={freeLink}>
+                <button className="rounded-full border border-black bg-black p-1.5 px-4 text-center text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl">
+                  Get Access for Free →
+                </button>
+              </a>
+              <br />
+              <br />
+              <a href={paidLink}>
+                <button className="rounded-full border border-black bg-black p-1.5 px-4 text-center text-lg text-white transition-all hover:bg-white hover:text-black sm:text-sm md:text-xl">
+                  Get Access for $0.99 →
+                </button>
+              </a>
+            </motion.div>
+          )}
         </motion.div>
 
         {showGeneratedCards && (

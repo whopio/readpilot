@@ -6,8 +6,12 @@ import Link from "next/link";
 import { ReactNode } from "react";
 import useScroll from "@/lib/hooks/use-scroll";
 import Meta from "./meta";
-import { useSignInModal } from "./sign-in-modal";
-import UserDropdown from "./user-dropdown";
+import { signIn, signOut } from "next-auth/react";
+import { setCookie, getCookie } from 'cookies-next'
+import { useState, useEffect } from "react";
+import Router from "next/router";
+import { isPropertySignature } from "typescript";
+
 
 export default function Layout({
   meta,
@@ -21,9 +25,43 @@ export default function Layout({
   children: ReactNode;
 }) {
   const { data: session, status } = useSession();
-  const { SignInModal, setShowSignInModal } = useSignInModal();
   const scrolled = useScroll(50);
-
+  const user = session?.user;
+  const access_token = session?.accessToken
+  let membership = getCookie('membership')
+  useEffect(() => {
+    if (!access_token) return;
+    fetchUserAccess();
+  }, [access_token]);
+    const fetchUserAccess = async () => {
+      const response = await fetch("api/fetchUserAccess", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token }),
+      })
+        .then((res) => {
+          if (res.status === 200) {
+            return res.json();
+          }
+          throw new Error("Something went wrong");
+        })
+        .then((responseJson) => {
+          if (
+            responseJson.valid
+            ) {
+              setCookie('membership', false)
+              if (membership){Router.reload()}
+            } else {
+              setCookie('membership', true)
+              if (!membership){Router.reload()}
+            }
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    };
   return (
     <>
       <Meta {...meta} />
@@ -46,22 +84,36 @@ export default function Layout({
             ></Image>
             <p>Read Pilot</p>
           </Link>
-          <div>
-            <AnimatePresence>
-              {!session && status !== "loading" ? (
+          {!user ? (
+            <>
+              <div>
+                <AnimatePresence>
+                  {!session && status !== "loading"}
+                  <motion.a
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
+                    onClick={() => signIn("whop")}
+                    {...FADE_IN_ANIMATION_SETTINGS}
+                  >
+                    Sign In
+                  </motion.a>
+                </AnimatePresence>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center">
+              <div className="mr-4 text-sm">{user ? `Signed in as ${user.name}` : ''}</div>
+              <AnimatePresence>
+                {!session && status !== "loading"}
                 <motion.a
-                  className="rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
-                  href="https://twitter.com/Tisoga"
-                  target="_blank"
+                  className="inline-block rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
+                  onClick={() => signOut()}
                   {...FADE_IN_ANIMATION_SETTINGS}
                 >
-                  Subscribe
+                  Sign Out
                 </motion.a>
-              ) : (
-                <UserDropdown />
-              )}
-            </AnimatePresence>
-          </div>
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </div>
       <main className="flex min-h-screen w-full flex-col items-center justify-center py-32">
@@ -78,7 +130,7 @@ export default function Layout({
           >
             Next.js
           </a>
-          &nbsp;and {""}
+          , {""}
           <a
             className="font-medium text-gray-800 underline transition-colors"
             href="https://openai.com/"
@@ -86,6 +138,15 @@ export default function Layout({
             rel="noopener noreferrer"
           >
             OpenAI
+          </a>
+          ,&nbsp;and {""}
+          <a
+            className="font-medium text-gray-800 underline transition-colors"
+            href="https://whop.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Whop
           </a>
         </p>
       </div>
