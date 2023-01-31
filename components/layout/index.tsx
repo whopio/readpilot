@@ -7,6 +7,11 @@ import { ReactNode } from "react";
 import useScroll from "@/lib/hooks/use-scroll";
 import Meta from "./meta";
 import { signIn, signOut } from "next-auth/react";
+import { setCookie, getCookie } from 'cookies-next'
+import { useState, useEffect } from "react";
+import Router from "next/router";
+import { isPropertySignature } from "typescript";
+
 
 export default function Layout({
   meta,
@@ -21,7 +26,42 @@ export default function Layout({
 }) {
   const { data: session, status } = useSession();
   const scrolled = useScroll(50);
-  const user = session?.user?.name;
+  const user = session?.user;
+  const access_token = session?.accessToken
+  let membership = getCookie('membership')
+  useEffect(() => {
+    if (!access_token) return;
+    fetchUserAccess();
+  }, [access_token]);
+    const fetchUserAccess = async () => {
+      const response = await fetch("api/fetchUserAccess", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token }),
+      })
+        .then((res) => {
+          if (res.status === 200) {
+            return res.json();
+          }
+          throw new Error("Something went wrong");
+        })
+        .then((responseJson) => {
+          if (
+            responseJson.valid
+            ) {
+              setCookie('membership', false)
+              if (membership){Router.reload()}
+            } else {
+              setCookie('membership', true)
+              if (!membership){Router.reload()}
+            }
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    };
   return (
     <>
       <Meta {...meta} />
@@ -61,7 +101,7 @@ export default function Layout({
             </>
           ) : (
             <div className="flex items-center">
-              <div className="mr-4 text-sm">{user ? `Signed in as ${user}` : ''}</div>
+              <div className="mr-4 text-sm">{user ? `Signed in as ${user.name}` : ''}</div>
               <AnimatePresence>
                 {!session && status !== "loading"}
                 <motion.a

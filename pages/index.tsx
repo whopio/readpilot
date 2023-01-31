@@ -9,6 +9,8 @@ import LinkIcon from "@/components/shared/icons/link";
 import { AccessPass, Membership, Plan } from "@whop-sdk/core";
 import { usePurchaseLink } from "@/lib/get-purchase-link";
 import { useRouter } from "next/router";
+import { setCookie, getCookie } from 'cookies-next'
+import { IncomingMessage, ServerResponse } from 'http';
 
 const ALLOWED_PASS: string = process.env.NEXT_PUBLIC_REQUIRED_PASS || "";
 
@@ -23,24 +25,31 @@ type PassGatedProps =
       plan: null;
     }
   | {
-      membership: null;
+      membership: null | boolean;
       pass: AccessPass;
       plan: Plan;
     };
 
+    export const getServerSideProps = ({ req, res }: { req: IncomingMessage, res: ServerResponse }) => {
+  let membership = getCookie('membership', { req, res }) || false;
+
+  return { props: {membership: membership} };
+};
+
 export default function Home(props: PassGatedProps) {
   const router = useRouter();
-  const { membershipId } = router.query;
-  let [membership, setMembership] = useState(false);
+  const { membershipId, code } = router.query;
+  let membership = props.membership
 
   useEffect(() => {
-    console.log("Membership Id changed to: ", membership);
-  }, [membership]);
-
-  useEffect(() => {
-    if (!membershipId) return;
+    if (!membershipId || !membership) return;
     fetchMembership();
   }, [membershipId]);
+
+  useEffect(() => {
+    if (!code || !membership) return;
+    fetchCodeAccess();
+  }, [code]);
 
 
 const fetchMembership = async () => {
@@ -58,15 +67,44 @@ const fetchMembership = async () => {
       throw new Error("Something went wrong");
     })
     .then((responseJson) => {
-      console.log(responseJson);
       if (
         responseJson.plan === process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID ||
         responseJson.plan === process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID
-      ) {
-        setMembership(false)
-      } else {
-        setMembership(true)
+        ) {
+          setCookie('membership', false)
+          membership = false
+        } else {
+          setCookie('membership', true)
+          membership = true
+        }
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+};
+
+const fetchCodeAccess = async () => {
+  const response = await fetch("api/fetchCodeAccess", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ code }),
+  })
+    .then((res) => {
+      if (res.status === 200) {
+        return res.json();
       }
+      throw new Error("Something went wrong");
+    })
+    .then((responseJson) => {
+      if (
+        responseJson.valid
+        ) {
+          setCookie('membership', false)
+        } else {
+          setCookie('membership', true)
+        }
     })
     .catch((error) => {
       console.error(error);
@@ -106,7 +144,6 @@ const fetchMembership = async () => {
         throw new Error("Something went wrong");
       })
       .then((responseJson) => {
-        console.log(responseJson);
         setResults(responseJson.data);
         setShowGeneratedCards(true);
       })
