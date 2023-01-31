@@ -9,8 +9,8 @@ import LinkIcon from "@/components/shared/icons/link";
 import { AccessPass, Membership, Plan } from "@whop-sdk/core";
 import { usePurchaseLink } from "@/lib/get-purchase-link";
 import { useRouter } from "next/router";
-import { setCookie, getCookie } from 'cookies-next'
-import { IncomingMessage, ServerResponse } from 'http';
+import { setCookie, getCookie } from "cookies-next";
+import { IncomingMessage, ServerResponse } from "http";
 
 const ALLOWED_PASS: string = process.env.NEXT_PUBLIC_REQUIRED_PASS || "";
 
@@ -30,19 +30,26 @@ type PassGatedProps =
       plan: Plan;
     };
 
-    export const getServerSideProps = ({ req, res }: { req: IncomingMessage, res: ServerResponse }) => {
-  let membership = getCookie('membership', { req, res }) || false;
+export const getServerSideProps = ({
+  req,
+  res,
+}: {
+  req: IncomingMessage;
+  res: ServerResponse;
+}) => {
+  let membership = getCookie("membership", { req, res }) || false;
 
-  return { props: {membership: membership} };
+  return { props: { membership: membership } };
 };
 
 export default function Home(props: PassGatedProps) {
   const router = useRouter();
   const { membershipId, code } = router.query;
-  let membership = props.membership
+  // let membership = props.membership;
+  let [membership, setMembership] = useState(props.membership);
 
   useEffect(() => {
-    if (!membershipId || !membership) return;
+    if (!membershipId || membership) return;
     fetchMembership();
   }, [membershipId]);
 
@@ -51,65 +58,62 @@ export default function Home(props: PassGatedProps) {
     fetchCodeAccess();
   }, [code]);
 
-
-const fetchMembership = async () => {
-  const response = await fetch("api/fetchMembership", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ membershipId }),
-  })
-    .then((res) => {
-      if (res.status === 200) {
-        return res.json();
-      }
-      throw new Error("Something went wrong");
+  const fetchMembership = async () => {
+    const response = await fetch("api/fetchMembership", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ membershipId }),
     })
-    .then((responseJson) => {
-      if (
-        responseJson.plan === process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID ||
-        responseJson.plan === process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID
-        ) {
-          setCookie('membership', false)
-          membership = false
-        } else {
-          setCookie('membership', true)
-          membership = true
+      .then((res) => {
+        if (res.status === 200) {
+          return res.json();
         }
-    })
-    .catch((error) => {
-      console.error(error);
-    });
-};
-
-const fetchCodeAccess = async () => {
-  const response = await fetch("api/fetchCodeAccess", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ code }),
-  })
-    .then((res) => {
-      if (res.status === 200) {
-        return res.json();
-      }
-      throw new Error("Something went wrong");
-    })
-    .then((responseJson) => {
-      if (
-        responseJson.valid
+        throw new Error("Something went wrong");
+      })
+      .then((responseJson) => {
+        if (
+          responseJson.plan === process.env.NEXT_PUBLIC_RECOMMENDED_PLAN_ID ||
+          responseJson.plan === process.env.NEXT_PUBLIC_PAID_RECOMMENDED_PLAN_ID
         ) {
-          setCookie('membership', false)
+          setCookie("membership", false);
+          setMembership(false);
         } else {
-          setCookie('membership', true)
+          setCookie("membership", true);
+          setMembership(true);
         }
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
+
+  const fetchCodeAccess = async () => {
+    const response = await fetch("api/fetchCodeAccess", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code }),
     })
-    .catch((error) => {
-      console.error(error);
-    });
-};
+      .then((res) => {
+        if (res.status === 200) {
+          return res.json();
+        }
+        throw new Error("Something went wrong");
+      })
+      .then((responseJson) => {
+        if (responseJson.valid) {
+          setCookie("membership", false);
+        } else {
+          setCookie("membership", true);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
 
   const freeLink = usePurchaseLink(RECOMMENDED_PLAN);
   const paidLink = usePurchaseLink(PAID_RECOMMENDED_PLAN);
