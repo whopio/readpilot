@@ -12,6 +12,10 @@ import { useState, useEffect } from "react";
 import Router from "next/router";
 import { isPropertySignature } from "typescript";
 
+function signOutButton(){
+  signOut()
+  setCookie('membership', false)
+}
 
 export default function Layout({
   meta,
@@ -90,7 +94,7 @@ export default function Layout({
                 <AnimatePresence>
                   {!session && status !== "loading"}
                   <motion.a
-                    className="rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
+                    className="rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black cursor-pointer"
                     onClick={() => signIn("whop")}
                     {...FADE_IN_ANIMATION_SETTINGS}
                   >
@@ -105,8 +109,8 @@ export default function Layout({
               <AnimatePresence>
                 {!session && status !== "loading"}
                 <motion.a
-                  className="inline-block rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black"
-                  onClick={() => signOut()}
+                  className="inline-block rounded-full border border-black bg-black p-1.5 px-4 text-sm text-white transition-all hover:bg-white hover:text-black cursor-pointer"
+                  onClick={() => signOutButton()}
                   {...FADE_IN_ANIMATION_SETTINGS}
                 >
                   Sign Out
