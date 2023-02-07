@@ -9,7 +9,7 @@ import LinkIcon from "@/components/shared/icons/link";
 import { AccessPass, Membership, Plan } from "@whop-sdk/core";
 import { usePurchaseLink } from "@/lib/get-purchase-link";
 import { useRouter } from "next/router";
-import { setCookie, getCookie } from "cookies-next";
+import { setCookie, getCookie, hasCookie } from "cookies-next";
 import { IncomingMessage, ServerResponse } from "http";
 
 const ALLOWED_PASS: string = process.env.NEXT_PUBLIC_REQUIRED_PASS || "";
@@ -124,6 +124,21 @@ export default function Home(props: PassGatedProps) {
   const [results, setResults] = useState([]);
 
   const generateCards = async (e: any) => {
+    const hour = 3600 * 1000;
+    const expires = new Date(Date.now() + hour);
+    if (hasCookie('limit')) {
+      const limit = getCookie('limit');
+      if (limit) {
+        const rate_limit = parseInt(limit.toString(), 10);
+        setCookie('limit', rate_limit + 1);
+        if (rate_limit > 10){
+          console.log('You have reached your hourly limit, try again in a bit.')
+          return
+        }
+      }
+    } else {
+      setCookie('limit',1, { expires: expires })
+    }
     e.preventDefault();
 
     if (url === "") {
